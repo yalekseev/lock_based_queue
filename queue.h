@@ -2,6 +2,7 @@
 #define QUEUE_H
 
 #include <memory>
+#include <mutex>
 
 template <typename T>
 class queue {
@@ -32,30 +33,49 @@ public:
     }
 
     bool try_pop(T & val) {
-        if (m_head == m_tail) {
+        node * old_head = pop_head();
+        if (0 == old_head) {
             return false;
         }
 
-        val = *(m_head->m_data);
-
-        node * old_head = m_head;
-        m_head = old_head->m_next;
+        val = *(old_head->m_data);
         delete old_head;
 
         return true;
     }
 
     void push(const T & val) {
-        node * new_node = new node(val);
+        std::shared_ptr<T> new_data(new T(val));
+        node * new_node = new node;
 
+        std::lock_guard<std::mutex> lock(m_tail_mutex);
+        m_tail->m_data = new_data;
         m_tail->m_next = new_node;
         m_tail = new_node;
     }
 
 private:
+    node * get_tail() {
+        std::lock_guard<std::mutex> lock(m_tail_mutex);
+        return m_tail;
+    }
+
+    node * pop_head() {
+        std::lock_guard<std::mutex> lock(m_head_mutex);
+        if (m_head == get_tail()) {
+            return 0;
+        }
+
+        node * old_head = m_head;
+        m_head = m_head->m_next;
+        return old_head;
+    }
+
     // Nodes are pushed to the tail and popped from the head.
     node * m_head;
+    std::mutex m_head_mutex;
     node * m_tail;
+    std::mutex m_tail_mutex;
 };
 
 #endif
