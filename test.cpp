@@ -28,10 +28,12 @@ int main() {
 
     queue<int> q;
     std::thread producer(std::bind(produce, std::ref(q)));
-    std::thread consumer(std::bind(consume, std::ref(q)));
+    std::thread consumer1(std::bind(consume, std::ref(q)));
+    std::thread consumer2(std::bind(consume, std::ref(q)));
 
     producer.join();
-    consumer.join();
+    consumer1.join();
+    consumer2.join();
 
     return 0;
 }
