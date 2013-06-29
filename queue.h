@@ -134,6 +134,7 @@ void queue<T>::push(const T & val) {
         m_tail->m_data = new_data;
         m_tail->m_next = new_node;
         m_tail = new_node;
+        ++m_size;
     }
 
     m_non_empty_cond.notify_one();
