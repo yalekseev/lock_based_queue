@@ -1,7 +1,8 @@
 lock_based_queue
 ================
 
-Lock-based queue
+Thread-safe lock-based queue. The queue is optimized to allow more concurrency.
+That is, push() and pop() can be run almost concurrently by different threads.
 
 Usage
 =====
