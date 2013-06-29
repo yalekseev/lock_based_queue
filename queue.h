@@ -2,6 +2,8 @@
 #define QUEUE_H
 
 #include <condition_variable>
+#include <atomic>
+#include <limits>
 #include <memory>
 #include <mutex>
 
@@ -10,6 +12,8 @@ namespace lock_based {
 template <typename T>
 class queue {
 private:
+    enum { MAX_CAPACITY = std::numeric_limits<int>::max() };
+
     struct node {
         node() : m_next(0) { }
 
@@ -22,7 +26,7 @@ private:
     };
 
 public:
-    queue();
+    explicit queue(int capacity = MAX_CAPACITY);
     queue(const queue & other) = delete;
     queue & operator=(const queue & other) = delete;
 
@@ -38,6 +42,9 @@ public:
 private:
     node * get_tail();
 
+    int m_capacity;
+    std::atomic<int> m_size;
+
     // Nodes are pushed to the tail and popped from the head.
     node * m_head;
     std::mutex m_head_mutex;
@@ -45,11 +52,16 @@ private:
     node * m_tail;
     std::mutex m_tail_mutex;
 
+    std::condition_variable m_non_full_cond;
     std::condition_variable m_non_empty_cond;
 };
 
 template <typename T>
-queue<T>::queue() : m_head(new node), m_tail(m_head) { }
+queue<T>::queue(int capacity)
+    : m_capacity(capacity)
+    , m_size(0)
+    , m_head(new node)
+    , m_tail(m_head) { }
 
 template <typename T>
 queue<T>::~queue() {
@@ -68,30 +80,46 @@ bool queue<T>::empty() const {
 
 template <typename T>
 void queue<T>::pop(T & val) {
-    std::unique_lock<std::mutex> lock(m_head_mutex);
-    m_non_empty_cond.wait(lock, [&](){ return m_head != get_tail(); });
+    node * old_head = 0;
 
-    val = *(m_head->m_data);
+    {
+        std::unique_lock<std::mutex> lock(m_head_mutex);
+        m_non_empty_cond.wait(lock, [&](){ return m_head != get_tail(); });
 
-    node * old_head = m_head;
-    m_head = m_head->m_next;
+        val = *(m_head->m_data);
+
+        old_head = m_head;
+        m_head = m_head->m_next;
+        --m_size;
+    }
+
+    m_non_full_cond.notify_one();
 
     delete old_head;
 }
 
 template <typename T>
 bool queue<T>::try_pop(T & val) {
-    std::lock_guard<std::mutex> lock(m_head_mutex);
-    if (m_head == get_tail()) {
-        return false;
+    node * old_head = 0;
+
+    {
+        std::lock_guard<std::mutex> lock(m_head_mutex);
+        if (m_head == get_tail()) {
+            return false;
+        }
+
+        val = *(m_head->m_data);
+
+        old_head = m_head;
+        m_head = m_head->m_next;
+
+        --m_size;
     }
 
-    val = *(m_head->m_data);
-
-    node * old_head = m_head;
-    m_head = m_head->m_next;
+    m_non_full_cond.notify_one();
 
     delete old_head;
+
     return true;
 }
 
@@ -101,7 +129,8 @@ void queue<T>::push(const T & val) {
     node * new_node = new node;
 
     {
-        std::lock_guard<std::mutex> lock(m_tail_mutex);
+        std::unique_lock<std::mutex> lock(m_tail_mutex);
+        m_non_full_cond.wait(lock, [&](){ return m_size < m_capacity; });
         m_tail->m_data = new_data;
         m_tail->m_next = new_node;
         m_tail = new_node;
