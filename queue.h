@@ -90,6 +90,7 @@ void queue<T>::pop(T & val) {
 
         old_head = m_head;
         m_head = m_head->m_next;
+
         --m_size;
     }
 
@@ -131,9 +132,11 @@ void queue<T>::push(const T & val) {
     {
         std::unique_lock<std::mutex> lock(m_tail_mutex);
         m_non_full_cond.wait(lock, [&](){ return m_size < m_capacity; });
+
         m_tail->m_data = new_data;
         m_tail->m_next = new_node;
         m_tail = new_node;
+
         ++m_size;
     }
 
