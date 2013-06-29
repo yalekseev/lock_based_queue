@@ -98,10 +98,14 @@ void queue<T>::push(const T & val) {
     std::shared_ptr<T> new_data(new T(val));
     node * new_node = new node;
 
-    std::lock_guard<std::mutex> lock(m_tail_mutex);
-    m_tail->m_data = new_data;
-    m_tail->m_next = new_node;
-    m_tail = new_node;
+    {
+        std::lock_guard<std::mutex> lock(m_tail_mutex);
+        m_tail->m_data = new_data;
+        m_tail->m_next = new_node;
+        m_tail = new_node;
+    }
+
+    m_non_empty_cond.notify_one();
 }
 
 template <typename T>
