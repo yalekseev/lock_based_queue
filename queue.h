@@ -5,6 +5,8 @@
 #include <memory>
 #include <mutex>
 
+namespace lock_based {
+
 template <typename T>
 class queue {
 private:
@@ -113,5 +115,7 @@ typename queue<T>::node * queue<T>::get_tail() {
     std::lock_guard<std::mutex> lock(m_tail_mutex);
     return m_tail;
 }
+
+} // namespace lock_based
 
 #endif
