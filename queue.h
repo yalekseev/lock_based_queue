@@ -10,7 +10,7 @@
 namespace lock_based {
 
 template <typename T>
-class queue {
+class queue final {
 private:
     enum { MAX_CAPACITY = std::numeric_limits<int>::max() };
 
