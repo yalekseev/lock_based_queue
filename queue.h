@@ -32,25 +32,35 @@ public:
 
     ~queue();
 
+    /*! \brief Return true if queue is empty. */
     bool empty() const;
 
+    /*! \brief Pop element from the queue in blocking mode. */
     void pop(T & val);
+    /*! \brief Pop element from the queue in non-blocking mode. */
     bool try_pop(T & val);
 
+    /*! \brief Push element to the queue in blocking mode. */
     void push(const T & val);
 
-private:
-    node * get_tail();
+    std::size_t size() const;
 
+private:
+    node * get_tail() const;
+
+    /*! \brief Max size of the queue. */
     int m_capacity;
+
+    /*! \brief Number of elements in the queue. */
     std::atomic<int> m_size;
 
-    // Nodes are pushed to the tail and popped from the head.
+    /*! \brief Nodes are popped from the head. */
     node * m_head;
-    std::mutex m_head_mutex;
+    mutable std::mutex m_head_mutex;
 
+    /*! \brief Nodes are pushed to the tail. */
     node * m_tail;
-    std::mutex m_tail_mutex;
+    mutable std::mutex m_tail_mutex;
 
     std::condition_variable m_non_full_cond;
     std::condition_variable m_non_empty_cond;
@@ -144,7 +154,12 @@ void queue<T>::push(const T & val) {
 }
 
 template <typename T>
-typename queue<T>::node * queue<T>::get_tail() {
+std::size_t queue<T>::size() const {
+    return m_size;
+}
+
+template <typename T>
+typename queue<T>::node * queue<T>::get_tail() const {
     std::lock_guard<std::mutex> lock(m_tail_mutex);
     return m_tail;
 }

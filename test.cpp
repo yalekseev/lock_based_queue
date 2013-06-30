@@ -1,24 +1,47 @@
 #include "queue.h"
 
+#include <iostream>
 #include <cstdlib>
-#include <thread>
+#include <cassert>
 #include <atomic>
+#include <thread>
+#include <mutex>
+#include <set>
 
-std::atomic<bool> done(false);
+std::mutex produced_mutex;
+std::set<int> produced;
+
+std::mutex consumed_mutex;
+std::set<int> consumed;
 
 void produce(lock_based::queue<int> & q) {
     for (std::size_t i = 0; i < 1000; ++i) {
-        q.push(std::rand());
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
+        int val = std::rand();
+        q.push(val);
 
-    done = true;
+        {
+            std::lock_guard<std::mutex> lock(produced_mutex);
+            produced.insert(val);
+        }
+
+        std::this_thread::yield();
+    }
 }
 
 void consume(lock_based::queue<int> & q) {
-    while (!done) {
+    while (true) {
         int val;
-        q.try_pop(val);
+        q.pop(val);
+
+        if (val == -1) {
+            break;
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(consumed_mutex);
+            consumed.insert(val);
+        }
+
         std::this_thread::yield();
     }
 }
@@ -26,14 +49,31 @@ void consume(lock_based::queue<int> & q) {
 int main() {
     std::srand(123);
 
-    lock_based::queue<int> queue;
-    std::thread producer(std::bind(produce, std::ref(queue)));
-    std::thread consumer1(std::bind(consume, std::ref(queue)));
-    std::thread consumer2(std::bind(consume, std::ref(queue)));
+    for (std::size_t i = 0; i < 100; ++i) {
+        lock_based::queue<int> queue(10000);
 
-    producer.join();
-    consumer1.join();
-    consumer2.join();
+        std::thread producer1(std::bind(produce, std::ref(queue)));
+        std::thread producer2(std::bind(produce, std::ref(queue)));
+        std::thread producer3(std::bind(produce, std::ref(queue)));
+        std::thread consumer1(std::bind(consume, std::ref(queue)));
+        std::thread consumer2(std::bind(consume, std::ref(queue)));
+
+        producer1.join();
+        producer2.join();
+        producer3.join();
+
+        while (!queue.empty()) {
+            std::this_thread::yield();
+        }
+
+        queue.push(-1);
+        queue.push(-1);
+
+        consumer1.join();
+        consumer2.join();
+
+        assert(produced == consumed);
+    }
 
     return 0;
 }
