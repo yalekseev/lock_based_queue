@@ -50,7 +50,8 @@ int main() {
     std::srand(123);
 
     for (std::size_t i = 0; i < 100; ++i) {
-        lock_based::queue<int> queue(10000);
+        lock_based::queue<int> queue;
+        queue.set_capacity(10000);
 
         std::thread producer1(std::bind(produce, std::ref(queue)));
         std::thread producer2(std::bind(produce, std::ref(queue)));

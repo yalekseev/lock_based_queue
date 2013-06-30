@@ -42,17 +42,23 @@ public:
 
     /*! \brief Push element to the queue in blocking mode. */
     void push(const T & val);
+    /*! \brief Push element to the queue in non-blocking mode. */
+    bool try_push(const T & val);
 
+    /*! \brief Return number of elements in the queue. */
     std::size_t size() const;
+
+    /*! \brief Set max size of the queue. */
+    void set_capacity(int capacity);
 
 private:
     node * get_tail() const;
 
-    /*! \brief Max size of the queue. */
-    int m_capacity;
-
     /*! \brief Number of elements in the queue. */
     std::atomic<int> m_size;
+
+    /*! \brief Max size of the queue. */
+    std::atomic<int> m_capacity;
 
     /*! \brief Nodes are popped from the head. */
     node * m_head;
@@ -154,8 +160,37 @@ void queue<T>::push(const T & val) {
 }
 
 template <typename T>
+bool queue<T>::try_push(const T & val) {
+    std::shared_ptr<T> new_data(new T(val));
+    std::shared_ptr<node> new_node(new node);
+
+    {
+        std::lock_guard<std::mutex> lock(m_tail_mutex);
+        if (m_capacity <= m_size) {
+            return false;
+        }
+
+        m_tail->m_data = new_data;
+        m_tail->m_next = new_node.get();
+        m_tail = new_node.get();
+        new_node.release();
+
+        ++m_size;
+    }
+
+    m_non_empty_cond.notify_one();
+
+    return true;
+}
+
+template <typename T>
 std::size_t queue<T>::size() const {
     return m_size;
+}
+
+template <typename T>
+void queue<T>::set_capacity(int capacity) {
+    m_capacity = capacity;
 }
 
 template <typename T>
